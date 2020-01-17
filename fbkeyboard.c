@@ -28,16 +28,21 @@ Copyright 2017 Julian Winkler <julia.winkler1@web.de>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-char *font = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+char *font = "/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf";
 char *device = NULL;
 char *layout[] = {"qwertyuiopasdfghjklzxcvbnm/.",
                   "QWERTYUIOPASDFGHJKLZXCVBNM?>",
-                  "1234567890-={};\'\\,./      /.",
-                  "!@#$%^&*()_+[]:\"|<>?      ?>"};
+                  "1234567890-=[];\'\\,.`      /.",
+                  "!@#$%^&*()_+{}:\"|<>~      ?>"};
 int layoutuse=0;
 __u16 keys[3][29] = {{KEY_Q, KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_U, KEY_I, KEY_O, KEY_P, KEY_A, KEY_S, KEY_D, KEY_F, KEY_G, KEY_H, KEY_J, KEY_K, KEY_L, KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_M, KEY_SLASH, KEY_DOT},
-                     {KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE, KEY_SEMICOLON, KEY_APOSTROPHE, KEY_BACKSLASH, KEY_COMMA, KEY_DOT, KEY_SLASH, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_M, KEY_SLASH, KEY_DOT},
+                     {KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE, KEY_SEMICOLON, KEY_APOSTROPHE, KEY_BACKSLASH, KEY_COMMA, KEY_DOT, KEY_GRAVE, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_M, KEY_SLASH, KEY_DOT},
                      {KEY_LEFTSHIFT, KEY_LEFTCTRL, KEY_ESC, KEY_TAB, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SPACE, KEY_ENTER, KEY_BACKSPACE}};
+
+#define TOUCHCOLOR 0x4444ee
+#define BUTTONCOLOR 0x111111
+#define BACKLITCOLOR 0xff0000
+
 
 struct fb_var_screeninfo vinfo;
 struct fb_fix_screeninfo finfo;
@@ -61,7 +66,8 @@ void fill_rect(int x, int y, int xend, int yend, int color) {
 void draw_char(int x, int y, char c) {
   int i, j;
   FT_Load_Char(face, c, FT_LOAD_RENDER);
-  y += hight*3/4-face->glyph->bitmap_top;
+  y += hight*1/3-face->glyph->bitmap_top;
+  x += hight*1/3-face->glyph->bitmap_top;
   for (i=0; i<face->glyph->bitmap.rows; i++)
     for (j=0; j<face->glyph->bitmap.width; j++) {
       *(buf + finfo.line_length*(i+y) + (j+x)*4) = *(face->glyph->bitmap.buffer + face->glyph->bitmap.pitch*i + j);
@@ -103,7 +109,7 @@ int main(int argc, char *argv[]) {
   int absolute_x, absolute_y, touchdown, pressed=-1, released, key;
 
   char c;
-  while((c = getopt(argc, argv, "d:f:h")) != -1) {
+  while((c = getopt(argc, argv, "d:f:h")) != (char)-1) {
     switch (c) {
       case 'd':
         device = optarg;
@@ -144,7 +150,7 @@ int main(int argc, char *argv[]) {
     perror("unable to load font file");
     exit(-1);
   }
-  if (FT_Set_Pixel_Sizes(face, hight*3/4, hight*3/4)) {
+  if (FT_Set_Pixel_Sizes(face, hight*1/3, hight*1/3)) {
     perror("FT_Set_Pixel_Sizes failed");
     exit(-1);
   }
@@ -202,44 +208,46 @@ int main(int argc, char *argv[]) {
   if(ioctl(fduinput, UI_DEV_CREATE) == -1)
     perror("error creating uinput dev");
 
-  buf = malloc(finfo.line_length * hight*5);
+  buf = malloc(finfo.line_length * (hight*5+1));
   if (buf == 0) {
     perror("malloc failed");
     exit(-1);
   }
-  fill_rect(0, 0, vinfo.xres, hight*5, 0x444444);//fill background gray
+  fill_rect(0, 0, vinfo.xres, hight*5+1, BACKLITCOLOR);
 
   while(1) {
-    char *special[] = {"ctl", "esc", "tab", "up", "down", "left", "right"};
+    char *special[] = {"Ctrl", "Esc", "Tab", "Up", "Down", "Left", "Right"};
     for (key=0; key<7; key++) {
-      fill_rect(key*vinfo.xres/7, 0, (key+1)*vinfo.xres/7-1, hight*1-1, (key+29==pressed)?0xffffff:0x000000);
-      draw_text(key*vinfo.xres/7, 0, special[key]);
+      fill_rect(key*vinfo.xres/7+1, 1, (key+1)*vinfo.xres/7-1, hight*1-1, (key+29==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+      draw_text(key*vinfo.xres/7+1, 1, special[key]);
     }
     for (key=0; key<10; key++) {
-      fill_rect(key*vinfo.xres/10, hight*1, (key+1)*vinfo.xres/10-1, hight*2-1, (key==pressed)?0xffffff:0x000000);
-      draw_char(key*vinfo.xres/10, hight*1, layout[layoutuse][key]);
+      fill_rect(key*vinfo.xres/10+1, hight*1, (key+1)*vinfo.xres/10-1, hight*2-1, (key==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+      draw_char(key*vinfo.xres/10+1, hight*1, layout[layoutuse][key]);
     }
     for (key=0; key<9; key++) {
-      fill_rect(vinfo.xres/20+key*vinfo.xres/10, hight*2, vinfo.xres/20+(key+1)*vinfo.xres/10-1, hight*3-1, (key+10==pressed)?0xffffff:0x000000);
+      fill_rect(vinfo.xres/20+key*vinfo.xres/10, hight*2, vinfo.xres/20+(key+1)*vinfo.xres/10-1, hight*3-1, (key+10==pressed)?TOUCHCOLOR:BUTTONCOLOR);
       draw_char(vinfo.xres/20+key*vinfo.xres/10, hight*2, layout[layoutuse][key+10]);
     }
-    fill_rect(0, hight*3, vinfo.xres*3/20-1, hight*4-1, (28==pressed)?0xffffff:0x000000);
-    draw_text(0, hight*3, "shift");
+    fill_rect(0, hight*2, vinfo.xres/20-1, hight*3-1, 0x000000);
+    fill_rect(vinfo.xres/20+9*vinfo.xres/10, hight*2, vinfo.xres, hight*3-1, 0x000000);
+    fill_rect(1, hight*3, vinfo.xres*3/20-1, hight*4-1, (28==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+    draw_text(1, hight*3, "Shift");
     for (key=0; key<7; key++) {
-      fill_rect(vinfo.xres*3/20+key*vinfo.xres/10, hight*3, vinfo.xres*3/20+(key+1)*vinfo.xres/10-1, hight*4-1, (key+19==pressed)?0xffffff:0x000000);
+      fill_rect(vinfo.xres*3/20+key*vinfo.xres/10, hight*3, vinfo.xres*3/20+(key+1)*vinfo.xres/10-1, hight*4-1, (key+19==pressed)?TOUCHCOLOR:BUTTONCOLOR);
       draw_char(vinfo.xres*3/20+key*vinfo.xres/10, hight*3, layout[layoutuse][key+19]);
     }
-    fill_rect(vinfo.xres*17/20, hight*3, vinfo.xres-1, hight*4-1, (38==pressed)?0xffffff:0x000000);
-    draw_text(vinfo.xres*17/20, hight*3, "bksp");
-    fill_rect(0, hight*4, vinfo.xres*3/20-1, hight*5-1, (39==pressed)?0xffffff:0x000000);
-    draw_text(0, hight*4, "?123");
-    fill_rect(vinfo.xres*3/20, hight*4, vinfo.xres*5/20-1, hight*5-1, (26==pressed)?0xffffff:0x000000);
+    fill_rect(vinfo.xres*17/20, hight*3, vinfo.xres-1, hight*4-1, (38==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+    draw_text(vinfo.xres*17/20, hight*3, "Bcksp");
+    fill_rect(1, hight*4, vinfo.xres*3/20-1, hight*5-1, (39==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+    draw_text(1, hight*4, "? 123");
+    fill_rect(vinfo.xres*3/20, hight*4, vinfo.xres*5/20-1, hight*5-1, (26==pressed)?TOUCHCOLOR:BUTTONCOLOR);
     draw_char(vinfo.xres*3/20, hight*4, layout[layoutuse][26]);
-    fill_rect(vinfo.xres/4, hight*4, vinfo.xres*3/4-1, hight*5-1, (36==pressed)?0xffffff:0x000000);
-    fill_rect(vinfo.xres*3/4, hight*4, vinfo.xres*17/20-1, hight*5-1, (27==pressed)?0xffffff:0x000000);
+    fill_rect(vinfo.xres/4, hight*4, vinfo.xres*3/4-1, hight*5-1, (36==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+    fill_rect(vinfo.xres*3/4, hight*4, vinfo.xres*17/20-1, hight*5-1, (27==pressed)?TOUCHCOLOR:BUTTONCOLOR);
     draw_char(vinfo.xres*3/4, hight*4, layout[layoutuse][27]);
-    fill_rect(vinfo.xres*17/20, hight*4, vinfo.xres-1, hight*5-1, (37==pressed)?0xffffff:0x000000);
-    draw_text(vinfo.xres*17/20, hight*4, "enter");
+    fill_rect(vinfo.xres*17/20, hight*4, vinfo.xres-1, hight*5-1, (37==pressed)?TOUCHCOLOR:BUTTONCOLOR);
+    draw_text(vinfo.xres*17/20, hight*4, "Enter");
 
     lseek(fbfd, finfo.line_length * (vinfo.yres-hight*5), SEEK_SET);
     write(fbfd, buf, finfo.line_length * hight*5);
