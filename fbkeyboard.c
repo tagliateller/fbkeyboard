@@ -250,20 +250,25 @@ int main(int argc, char *argv[])
 			exit(-1);
 		}
 	}
-	if (ioctl(fdinput, EVIOCGABS(ABS_MT_POSITION_X), &abs_x) == -1)
+	if ((ioctl(fdinput, EVIOCGABS(ABS_MT_POSITION_X), &abs_x) == -1) ||
+	    (ioctl(fdinput, EVIOCGABS(ABS_MT_POSITION_Y), &abs_y) == -1)) {
 		perror("error: getting touchscreen size");
-	if (ioctl(fdinput, EVIOCGABS(ABS_MT_POSITION_Y), &abs_y) == -1)
-		perror("error: getting touchscreen size");
+		exit(-1);
+	}
 
 	fduinput = open("/dev/uinput", O_WRONLY);
 	if (fduinput == -1) {
 		perror("error: cannot open uinput device /dev/uinput");
 		exit(-1);
 	}
-	if (ioctl(fduinput, UI_SET_EVBIT, EV_KEY) == -1)
+	if (ioctl(fduinput, UI_SET_EVBIT, EV_KEY) == -1) {
 		perror("error: SET_EVBIT EV_KEY");
-	if (ioctl(fduinput, UI_SET_EVBIT, EV_SYN) == -1)
+		exit(-1);
+	}
+	if (ioctl(fduinput, UI_SET_EVBIT, EV_SYN) == -1) {
 		perror("error: SET_EVBIT EV_SYN");
+		exit(-1);
+	}
 	for (row = 0; row < 6; row++)
 		for (key = 0; key < sizeof(keys[row]); key++)
 			ioctl(fduinput, UI_SET_KEYBIT, keys[row][key]);
@@ -274,10 +279,14 @@ int main(int argc, char *argv[])
 	uidev.id.vendor = 1;
 	uidev.id.product = 1;
 	uidev.id.version = 1;
-	if (write(fduinput, &uidev, sizeof(uidev)) != sizeof(uidev))
+	if (write(fduinput, &uidev, sizeof(uidev)) != sizeof(uidev)) {
 		fprintf(stderr, "error setting up uinput\n");
-	if (ioctl(fduinput, UI_DEV_CREATE) == -1)
+		exit(-1);
+	}
+	if (ioctl(fduinput, UI_DEV_CREATE) == -1) {
 		perror("error creating uinput dev");
+		exit(-1);
+	}
 
 	buf = malloc(finfo.line_length * (height * 5 + 1));
 	if (buf == 0) {
