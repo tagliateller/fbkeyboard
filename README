@@ -1,19 +1,21 @@
 fbkeyboard
+
 This is a framebuffer softkeyboard for use on devices with touchscreen input like smartphones.
 It was designed for the linux text console.
-It uses lib freetype to render fonts.
-Keystrokes will be send to the kernel using uinput
+It uses freetype2 lib to render fonts.
+Keystrokes will be send to the kernel using uinput.
 
 How to build:
-just run make in this directory
+Just run make in this directory.
 
 How to run:
-./fbkeyboard [-d inputdevice] [-f font]
+# ./fbkeyboard [-h] [-d inputdevice] [-f font] [-r rotation]
 inputdevice has to be the device node of the touchscreen, eg: /dev/input/event1.
 If no inputdevice was given, the first device in /dev/input with absolute axes support will be used.
-font has to be a ttf file. If no font was given, "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf" will be used.
+font has to be a ttf file. If no font was given, "/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf" will be used.
+rotation is a number between 0-3, 0 = normal, 1 = rotate CW, 2 = rotate 180 degrees, 3 = rotate CCW
 
-usefull tips:
-use stty to adjust the console size to avoid overlapping the console and the kayboard.
-stty rows <number-of-rows>
+Useful tips:
+Use stty to adjust the console size to avoid overlapping the console and the keyboard.
+# stty rows <number-of-rows>
 
