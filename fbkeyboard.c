@@ -19,6 +19,7 @@
 */
 
 #include <stdlib.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
@@ -27,8 +28,11 @@
 #include <linux/fb.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
+#include <linux/vt.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+volatile sig_atomic_t done = 0;
 
 char *font = "/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf";
 char *device = NULL;
@@ -81,6 +85,7 @@ int fblinelength;	// of one line of framebuffer
 int height;	// of one row of keys
 int width;	// of keyboard (= width of screen)
 int linelength;	// of one line of keyboard shape in bytes
+int landscape;	// false = portrait
 
 FT_Face face;
 int advance;	// offset to the next glyph
@@ -327,7 +332,7 @@ int check_input_events(int fdinput, int *x, int *y)
 	int released = 0;
 	int key = 1;
 	int absolute_x = -1, absolute_y = -1;
-	while (!released && (absolute_x == -1 || absolute_y == -1))
+	while (!done && !released && (absolute_x == -1 || absolute_y == -1))
 		while (read(fdinput, &ie, sizeof(struct input_event))
 		       && !(ie.type == EV_SYN && ie.code == SYN_REPORT)) {
 			if (ie.type == EV_ABS) {
@@ -485,13 +490,83 @@ void send_uinput_event(int row, int pressed)
 	}
 }
 
+/*
+ * return max of rows
+ */
+int reset_window_size(int fd)
+{
+	struct winsize win = { 0, 0, 0, 0 };
+
+	if (ioctl(fd, TIOCGWINSZ, &win)) {
+		if (errno != EINVAL) {
+			perror("error resetting window size");
+			return 0;
+		}
+		memset(&win, 0, sizeof(win));
+	}
+
+	win.ws_row += 2;
+	if (!ioctl(fd, TIOCSWINSZ, (char *) &win)) {
+		do {
+			win.ws_row *= landscape ? 4 : 3;
+			win.ws_row /= 2;
+		} while (!ioctl(fd, TIOCSWINSZ, (char *) &win));
+		do {
+			win.ws_row--;
+		} while (ioctl(fd, TIOCSWINSZ, (char *) &win));
+	}
+	return win.ws_row;
+}
+
+void set_window_size(int fd)
+{
+	struct winsize win = { 0, 0, 0, 0 };
+	int rows;
+
+	rows = reset_window_size(fd);
+	if (ioctl(fd, TIOCGWINSZ, &win)) {
+		if (errno != EINVAL)
+			goto bail;
+		memset(&win, 0, sizeof(win));
+	}
+
+	win.ws_row *= 2;
+	win.ws_row /= landscape ? 4 : 3;
+	if (ioctl(fd, TIOCSWINSZ, (char *) &win))
+bail:
+		perror("error setting window size");
+}
+
+void term(int signum)
+{
+	done = 1;
+}
+
 int main(int argc, char *argv[])
 {
 	char *p = NULL;
-	int fbfd, fdinput;
+	int fbfd, fdinput, fdcons;
+	int tty = 0;
+	int resized[MAX_NR_CONSOLES + 1];
 	struct input_absinfo abs_x, abs_y;
 	FT_Library library;
 	int x, y, row, pressed = -1, released, key;
+
+	struct sigaction action;
+	struct vt_stat ttyinfo;
+
+	memset(&resized, 0, sizeof(resized));
+
+	fdcons = open("/dev/tty0", O_RDWR | O_NOCTTY);
+	if (fdcons < 0) {
+		perror("Error opening /dev/tty0");
+		exit(-1);
+	}
+
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = term;
+	sigaction(SIGTERM, &action, NULL);
+	sigaction(SIGINT, &action, NULL);
 
 	char c;
 	while ((c = getopt(argc, argv, "d:f:r:h")) != (char) -1) {
@@ -541,16 +616,18 @@ int main(int argc, char *argv[])
 	switch (rotate) {
 		case FB_ROTATE_UR:
 		case FB_ROTATE_UD:
+			landscape = fbheight < fbwidth;
 			width = fbwidth;
-			height = fbheight / (fbheight > fbwidth ? 3 : 2) / 5;	// height of one row
+			height = fbheight / (landscape ? 2 : 3) / 5;	// height of one row
 			trowh = height * 0x10000 / fbheight;
 			linelength = fblinelength;
 			buflen = linelength * (height * 5 + 1);
 			break;
 		case FB_ROTATE_CW:
 		case FB_ROTATE_CCW:
+			landscape = fbheight > fbwidth;
 			width = fbheight;
-			height = fbwidth / (fbwidth > fbheight ? 3 : 2) / 5;	// height of one row
+			height = fbwidth / (landscape ? 2 : 3) / 5;	// height of one row
 			trowh = height * 0x10000 / fbwidth;
 			linelength = height * 5 * 4;
 			buflen = width * 4 * (height * 5 + 1);
@@ -644,7 +721,20 @@ int main(int argc, char *argv[])
 	}
 	fill_rect(0, 0, width - 1, height * 5, TERMCOLOR);
 
-	while (1) {
+
+	while (!done) {
+		if (!ioctl(fdcons, VT_GETSTATE, &ttyinfo)) {
+			if (tty != ttyinfo.v_active) {
+				tty = ttyinfo.v_active;
+				close(fdcons);
+				fdcons = open("/dev/tty0", O_RDWR | O_NOCTTY);
+				set_window_size(fdcons);
+				resized[tty] = 1;
+			}
+		} else {
+			perror("VT_GETSTATE ioctl failed");
+		}
+
 		draw_keyboard(row, pressed);
 		show_fbkeyboard(fbfd);
 
@@ -655,5 +745,20 @@ int main(int argc, char *argv[])
 		pressed = -1;
 		if (!released)
 			identify_touched_key(x, y, &row, &pressed);
+	}
+
+	int i;
+	char buf[12];
+	for (i = 1; i <= MAX_NR_CONSOLES; i++) {
+		snprintf(buf, 12, "/dev/tty%d", i);
+		if (resized[i]) {
+			close(fdcons);
+			fdcons = open(buf, O_RDWR | O_NOCTTY);
+			if (fdcons < 0) {
+				perror("Error opening /dev/tty[i]");
+				exit(-1);
+			}
+			reset_window_size(fdcons);
+		}
 	}
 }
