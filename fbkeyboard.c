@@ -633,7 +633,7 @@ int main(int argc, char *argv[])
 			buflen = width * 4 * (height * 5 + 1);
 			break;
 	}
-
+	fprintf(stdout, "After Rotate: width=%d height=%d trowh=%d\n", width, height, trowh);
 	if (FT_Init_FreeType(&library)) {
 		perror("error: freetype initialization");
 		exit(-1);
@@ -746,6 +746,7 @@ int main(int argc, char *argv[])
 		if (!released) {
 			fprintf(stdout, "Touch Key identified: %d %d\n", x, y);
 			identify_touched_key(x, y, &row, &pressed);
+			fprintf(stdout, "Result ist: row=% pressed=%d\n", row, pressed);
 		}
 	}
 
