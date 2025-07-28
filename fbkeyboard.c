@@ -743,8 +743,10 @@ int main(int argc, char *argv[])
 			send_uinput_event(row, pressed);
 
 		pressed = -1;
-		if (!released)
+		if (!released) {
+			fprintf(stdout, "Touch Key identified: %d %d\n", x, y);
 			identify_touched_key(x, y, &row, &pressed);
+		}
 	}
 
 	int i;
