@@ -101,9 +101,9 @@ void fill_rect(int x, int y, int w, int h, int color)
 	int i, j, t;
 	int32_t *line;
 	switch (rotate) {
-		case FB_ROTATE_UR:
-			break;
 		case FB_ROTATE_UD:
+			break;
+		case FB_ROTATE_UR:
 			x = width - x - w;
 			y = (height * 5) - y - h;
 			break;
@@ -132,13 +132,13 @@ void draw_char(int x, int y, char c)
 	int color;
 	FT_Matrix matrix;
 	switch (rotate) {
-		case FB_ROTATE_UR:
+		case FB_ROTATE_UD:
 			FT_Load_Char(face, c, FT_LOAD_RENDER);
 			x += face->glyph->bitmap_left;
 			y += (face->size->metrics.ascender >> 6) - face->glyph->bitmap_top;
 			advance = face->glyph->advance.x >> 6;
 			break;
-		case FB_ROTATE_UD:
+		case FB_ROTATE_UR:
 			matrix.xx = (FT_Fixed)(-1 * 0x10000L);
 			matrix.xy = (FT_Fixed)(0);
 			matrix.yx = (FT_Fixed)(0);
@@ -301,11 +301,11 @@ void draw_keyboard(int row, int pressed)
 void show_fbkeyboard(int fbfd)
 {
 	switch (rotate) {
-		case FB_ROTATE_UR:
+		case FB_ROTATE_UD:
 			lseek(fbfd, fblinelength * (fbheight - height * 5), SEEK_SET);
 			write(fbfd, buf, buflen);
 			break;
-		case FB_ROTATE_UD:
+		case FB_ROTATE_UR:
 			lseek(fbfd, 0, SEEK_SET);
 			write(fbfd, buf, buflen);
 			break;
@@ -359,11 +359,11 @@ int check_input_events(int fdinput, int *x, int *y)
 			}
 		}
 	switch (rotate) {
-		case FB_ROTATE_UR:
+		case FB_ROTATE_UD:
 			*x = absolute_x * 0x10000 / twidth;
 			*y = absolute_y * 0x10000 / theight;
 			break;
-		case FB_ROTATE_UD:
+		case FB_ROTATE_UR:
 			*x = 0x10000 - absolute_x * 0x10000 / twidth;
 			*y = 0x10000 - absolute_y * 0x10000 / theight;
 			break;
